@@ -5,6 +5,23 @@ import langcodes
 from datetime import datetime, timezone
 from netflix_utils import extract_netflix_account_info
 
+def safe_decode_unicode(s):
+    """
+    Decodes unicode escape sequences and ensures no lone surrogates exist.
+    """
+    if not s:
+        return s
+    try:
+        # Decode escape sequences (e.g. \u00e9 -> é)
+        decoded = bytes(s, 'utf-8').decode('unicode_escape')
+    except Exception:
+        return s
+
+    # Sanitize lone surrogates that are invalid in UTF-8
+    # encode with 'replace' converts surrogates to '?' (or similar)
+    # decode back to string
+    return decoded.encode('utf-8', 'replace').decode('utf-8')
+
 async def verify_account_async(cookies):
     """
     Verifies Netflix cookies and extracts account information.
@@ -74,26 +91,17 @@ async def verify_account_async(cookies):
         fn_m = re.search(r'"firstName"\s*:\s*"([^"]+)"', html)
         name_val = fn_m.group(1) if fn_m else None
         if name_val:
-            try:
-                name_val = bytes(name_val, 'utf-8').decode('unicode_escape')
-            except Exception:
-                pass # Keep original if decode fails
+            name_val = safe_decode_unicode(name_val)
 
         em_m = re.search(r'"emailAddress"\s*:\s*"(.*?)"', html)
         mail = None
         if em_m:
-            try:
-                mail = bytes(em_m.group(1), 'utf-8').decode('unicode_escape')
-            except Exception:
-                mail = em_m.group(1)
+            mail = safe_decode_unicode(em_m.group(1))
 
         ph_m   = re.search(r'"phoneNumber"\s*:\s*"(.*?)"', html)
         phone = None
         if ph_m:
-            try:
-                phone = bytes(ph_m.group(1), 'utf-8').decode('unicode_escape')
-            except Exception:
-                phone = ph_m.group(1)
+            phone = safe_decode_unicode(ph_m.group(1))
 
         ms2_m  = re.search(r'"memberSince"\s*:\s*{[^}]*"value"\s*:(\d+)', html)
         signup = None
@@ -111,10 +119,7 @@ async def verify_account_async(cookies):
         )
         next_pay = None
         if np_m:
-             try:
-                next_pay = bytes(np_m.group(1), 'utf-8').decode('unicode_escape')
-             except Exception:
-                next_pay = np_m.group(1)
+             next_pay = safe_decode_unicode(np_m.group(1))
 
         ems_m       = re.search(
             r'"showExtraMemberSection"\s*:\s*{[^}]*"value"\s*:\s*(true|false)',
