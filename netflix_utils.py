@@ -48,3 +48,19 @@ def parse_accounts(filepath):
                 accounts.append(account_data)
 
     return accounts
+
+def extract_netflix_account_info(html):
+    """
+    Placeholder for extracting Netflix account info.
+    The actual scraping logic is handled by regexes in cookie_tester.py,
+    but the snippet calls this function.
+
+    Args:
+        html (str): The HTML content.
+
+    Returns:
+        str: Extracted info string or None.
+    """
+    # TODO: Implement actual extraction if needed.
+    # For now, return None so the calling code handles it (empty billed_using list).
+    return None

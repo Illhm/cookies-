@@ -1,1 +1,6 @@
-requests
+httpx
+pycountry
+langcodes[data]
+pytest
+pytest-asyncio
+respx

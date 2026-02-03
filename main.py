@@ -1,31 +1,28 @@
 import argparse
 import os
 import sys
-from cookie_tester import test_cookie
+import asyncio
+from cookie_tester import verify_account_async
 from netflix_utils import parse_accounts
 
-def main():
-    parser = argparse.ArgumentParser(description="Test cookies against a URL.")
-    parser.add_argument("--url", help="The target URL.")
-    parser.add_argument("--cookie", help="Cookie in 'name=value' format.")
-    parser.add_argument("--file", help="Path to a file containing account/cookie data.")
-
-    args = parser.parse_args()
-
+async def run_checks(args):
     # Mode 1: Batch file processing
     filepath = args.file
-    if not filepath and not args.url and os.path.exists('p.txt'):
-        filepath = 'p.txt'
-        print("No arguments provided. Defaulting to 'p.txt'.")
+    # Auto-detect p.txt if no args provided
+    if not filepath and not args.cookie and os.path.exists('p.txt'):
+        # Check if user meant to run without args to use p.txt
+        # If args.url is present, we ignore it basically, or treat it as single mode?
+        # The original code logic: if not filepath and not args.url and exists('p.txt') -> use p.txt
+        if not args.url:
+             filepath = 'p.txt'
+             print("No arguments provided. Defaulting to 'p.txt'.")
 
     if filepath:
         print(f"Reading accounts from {filepath}...")
         accounts = parse_accounts(filepath)
         print(f"Found {len(accounts)} accounts.")
 
-        target_url = args.url if args.url else "https://www.netflix.com/browse"
-
-        print(f"Testing against {target_url}...\n")
+        print(f"Testing cookies against Netflix...\n")
 
         for acc in accounts:
             email = acc.get('email', 'Unknown')
@@ -35,27 +32,19 @@ def main():
                 print(f"[-] {email}: No valid cookies found.")
                 continue
 
-            response = test_cookie(target_url, cookies)
+            result = await verify_account_async(cookies)
 
-            if response:
-                status = response.status_code
-                # Netflix often redirects to /login if cookies are invalid, or returns 200 on success.
-                # However, bot protection might return 403 or 405 or 5xx.
-                if status == 200:
-                    if "browse" in response.url:
-                         print(f"[+] {email}: Success (200) - Redirected to Browse")
-                    else:
-                         print(f"[+] {email}: Success (200) - URL: {response.url}")
-                elif status in [301, 302, 307]:
-                     print(f"[*] {email}: Redirect ({status}) -> {response.headers.get('Location')}")
-                else:
-                    print(f"[-] {email}: Failed ({status})")
+            if result:
+                 print(f"[+] {email}: Success")
+                 for line in result:
+                     print(f"    {line}")
+                 print("-" * 40)
             else:
-                print(f"[-] {email}: Connection Error")
+                print(f"[-] {email}: Failed / Expired")
         return
 
     # Mode 2: Single cookie testing
-    if args.url and args.cookie:
+    if args.cookie:
         try:
             key, value = args.cookie.split('=', 1)
             cookie_data = {key: value}
@@ -63,20 +52,34 @@ def main():
             print("Error: Cookie must be in 'name=value' format.")
             return
 
-        print(f"Testing cookie '{args.cookie}' against {args.url}...")
-        response = test_cookie(args.url, cookie_data)
+        print(f"Testing cookie '{args.cookie}'...")
+        result = await verify_account_async(cookie_data)
 
-        if response:
-            print(f"Status Code: {response.status_code}")
-            print("Response Body Snippet (first 500 chars):")
-            print(response.text[:500])
+        if result:
+            for line in result:
+                print(line)
         else:
-            print("Failed to get a response.")
+            print("Failed to verify cookie.")
         return
 
+    # If args.url is provided but no cookie/file, we can't do much
+    if args.url and not args.cookie:
+        print("URL provided but no cookie. Use --cookie.")
+        sys.exit(1)
+
     # Fallback if arguments are missing
-    parser.print_help()
+    print("Usage: python main.py [--file <path> | --cookie <name=value>]")
     sys.exit(1)
+
+def main():
+    parser = argparse.ArgumentParser(description="Test cookies against Netflix.")
+    parser.add_argument("--url", help="Ignored in new version (checks /account).")
+    parser.add_argument("--cookie", help="Cookie in 'name=value' format.")
+    parser.add_argument("--file", help="Path to a file containing account/cookie data.")
+
+    args = parser.parse_args()
+
+    asyncio.run(run_checks(args))
 
 if __name__ == "__main__":
     main()
