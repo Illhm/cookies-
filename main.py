@@ -39,6 +39,15 @@ async def run_checks(args):
                  for line in result:
                      print(f"    {line}")
                  print("-" * 40)
+
+                 # Save working cookie
+                 try:
+                     with open(args.output, "a", encoding="utf-8") as f:
+                         cookie_str = " | ".join([f"{k} = {v}" for k, v in cookies.items()])
+                         f.write(f"{email} | {cookie_str}\n")
+                 except Exception as e:
+                     print(f"Error saving cookie: {e}")
+
             else:
                 print(f"[-] {email}: Failed / Expired")
         return
@@ -58,6 +67,15 @@ async def run_checks(args):
         if result:
             for line in result:
                 print(line)
+
+            # Save working cookie
+            try:
+                with open(args.output, "a", encoding="utf-8") as f:
+                    cookie_str = " | ".join([f"{k} = {v}" for k, v in cookie_data.items()])
+                    f.write(f"Unknown | {cookie_str}\n")
+            except Exception as e:
+                print(f"Error saving cookie: {e}")
+
         else:
             print("Failed to verify cookie.")
         return
@@ -76,6 +94,7 @@ def main():
     parser.add_argument("--url", help="Ignored in new version (checks /account).")
     parser.add_argument("--cookie", help="Cookie in 'name=value' format.")
     parser.add_argument("--file", help="Path to a file containing account/cookie data.")
+    parser.add_argument("--output", default="live_cookies.txt", help="File to save working cookies to.")
 
     args = parser.parse_args()
 
