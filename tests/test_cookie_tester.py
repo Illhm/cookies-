@@ -37,9 +37,18 @@ async def test_verify_account_success():
         result = await verify_account_async(cookies)
 
         assert result is not None
-        result_text = "\n".join(result)
+        assert isinstance(result, dict)
+        assert "lines" in result
+        assert "cookies" in result
+        assert "info" in result
 
-        assert "Account Information:" in result
+        assert result["info"]["region"] == "US"
+        assert result["info"]["next_billing_date"] == "February 20, 2025"
+
+        lines = result["lines"]
+        result_text = "\n".join(lines)
+
+        assert "Account Information:" in lines
         assert "Country: (US) United States" in result_text
         assert "Membership status: Current Member" in result_text
         assert "Plan status: Active" in result_text
