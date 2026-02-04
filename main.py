@@ -2,17 +2,61 @@ import argparse
 import os
 import sys
 import asyncio
+import json
+from datetime import datetime
 from cookie_tester import verify_account_async
 from netflix_utils import parse_accounts
+
+def format_date_for_filename(date_str):
+    if not date_str or date_str == "Unknown":
+        return "UnknownDate"
+    try:
+        # Try "February 4, 2026"
+        dt = datetime.strptime(date_str, "%B %d, %Y")
+        return dt.strftime("%Y-%m-%d")
+    except ValueError:
+        pass
+
+    # Try sanitizing
+    safe_str = "".join([c if c.isalnum() else "_" for c in date_str])
+    return safe_str
+
+def export_cookies_json(cookies, filename):
+    # Convert httpx Cookies to list of dicts
+    cookie_list = []
+    for cookie in cookies.jar:
+        # Handle expiration
+        exp = cookie.expires
+
+        # Check for httpOnly in _rest (common in http.cookiejar)
+        http_only = False
+        if hasattr(cookie, '_rest') and 'HttpOnly' in cookie._rest:
+             http_only = True
+
+        c_dict = {
+            "domain": cookie.domain,
+            "expirationDate": exp,
+            "hostOnly": not cookie.domain.startswith('.'),
+            "httpOnly": http_only,
+            "name": cookie.name,
+            "path": cookie.path,
+            "sameSite": "unspecified",
+            "secure": cookie.secure,
+            "session": exp is None,
+            "storeId": "0",
+            "value": cookie.value,
+            "id": len(cookie_list) + 1
+        }
+        cookie_list.append(c_dict)
+
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(cookie_list, f, indent=4)
 
 async def run_checks(args):
     # Mode 1: Batch file processing
     filepath = args.file
     # Auto-detect p.txt if no args provided
     if not filepath and not args.cookie and os.path.exists('p.txt'):
-        # Check if user meant to run without args to use p.txt
-        # If args.url is present, we ignore it basically, or treat it as single mode?
-        # The original code logic: if not filepath and not args.url and exists('p.txt') -> use p.txt
         if not args.url:
              filepath = 'p.txt'
              print("No arguments provided. Defaulting to 'p.txt'.")
@@ -35,18 +79,27 @@ async def run_checks(args):
             result = await verify_account_async(cookies)
 
             if result:
+                 lines = result.get('lines', [])
                  print(f"[+] {email}: Success")
-                 for line in result:
+                 for line in lines:
                      print(f"    {line}")
                  print("-" * 40)
 
-                 # Save working cookie
+                 # Export JSON
+                 region = result['info'].get('region', 'Unknown')
+                 exp_date = result['info'].get('next_billing_date', 'Unknown')
+                 formatted_date = format_date_for_filename(exp_date)
+
+                 # Sanitize email for filename
+                 safe_email = "".join([c if c.isalnum() else "_" for c in email])
+
+                 filename = f"{region}_{formatted_date}_{safe_email}.json"
+
                  try:
-                     with open(args.output, "a", encoding="utf-8") as f:
-                         cookie_str = " | ".join([f"{k} = {v}" for k, v in cookies.items()])
-                         f.write(f"{email} | {cookie_str}\n")
+                     export_cookies_json(result['cookies'], filename)
+                     print(f"    Saved cookies to {filename}")
                  except Exception as e:
-                     print(f"Error saving cookie: {e}")
+                     print(f"    Error saving JSON: {e}")
 
             else:
                 print(f"[-] {email}: Failed / Expired")
@@ -65,16 +118,23 @@ async def run_checks(args):
         result = await verify_account_async(cookie_data)
 
         if result:
-            for line in result:
+            lines = result.get('lines', [])
+            for line in lines:
                 print(line)
 
-            # Save working cookie
+            # Export JSON
+            region = result['info'].get('region', 'Unknown')
+            exp_date = result['info'].get('next_billing_date', 'Unknown')
+            formatted_date = format_date_for_filename(exp_date)
+
+            # Use 'SingleCookie' or similar since email is unknown
+            filename = f"{region}_{formatted_date}_SingleCookie.json"
+
             try:
-                with open(args.output, "a", encoding="utf-8") as f:
-                    cookie_str = " | ".join([f"{k} = {v}" for k, v in cookie_data.items()])
-                    f.write(f"Unknown | {cookie_str}\n")
+                export_cookies_json(result['cookies'], filename)
+                print(f"    Saved cookies to {filename}")
             except Exception as e:
-                print(f"Error saving cookie: {e}")
+                print(f"Error saving JSON: {e}")
 
         else:
             print("Failed to verify cookie.")

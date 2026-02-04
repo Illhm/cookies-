@@ -30,11 +30,12 @@ async def verify_account_async(cookies):
         cookies (dict): A dictionary of cookies to send.
 
     Returns:
-        list: A list of strings containing account details if valid, else None.
+        dict: A dictionary containing 'lines', 'cookies', and 'info' if valid, else None.
     """
     # Ensure cookies are properly formatted for the request
     # httpx accepts a dict of cookies.
     session_cookies = cookies
+    final_cookies = None
 
     async with httpx.AsyncClient(
         headers={"User-Agent": "Mozilla/5.0"},
@@ -51,6 +52,7 @@ async def verify_account_async(cookies):
             )
             html  = resp.text
             valid = str(resp.url).startswith("https://www.netflix.com/account")
+            final_cookies = client.cookies
         except httpx.HTTPError:
             valid = False
             html  = ""
@@ -80,8 +82,10 @@ async def verify_account_async(cookies):
 
         co_m = re.search(r'"countryOfSignup"\s*:\s*"([A-Z]{2})"', html)
         country = None
+        region_code = "Unknown"
         if co_m:
             code    = co_m.group(1)
+            region_code = code
             try:
                 c_obj = pycountry.countries.get(alpha_2=code)
                 country = f"({code}) {c_obj.name}" if c_obj else f"({code})"
@@ -156,6 +160,15 @@ async def verify_account_async(cookies):
         # Add success message as requested
         section.append("✅ This cookie is working, enjoy Netflix 🍿")
 
-        return section
+        extracted_info = {
+            "region": region_code,
+            "next_billing_date": next_pay if next_pay else "Unknown"
+        }
+
+        return {
+            "lines": section,
+            "cookies": final_cookies,
+            "info": extracted_info
+        }
 
     return None
