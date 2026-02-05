@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+tes.txt
+output.json
+temp_extracted/
+temp_extracted_process/
